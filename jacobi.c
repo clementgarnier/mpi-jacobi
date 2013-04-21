@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define MAX_ITER 500000
+#define MAX_ITER 10000
 #define TEMP_INITIALE 0.0
 #define TEMP_GAUCHE 10
 #define TEMP_DROITE 10
@@ -19,12 +19,23 @@ void initialize(float** grid, int n, int height, int numProcs, int myID) {
     for(int i = 0; i < height + 2; i++) {
         for(int j = 0; j < n + 2; j++) {
             if(i == 0 && myID == 0) grid[i][j] = TEMP_HAUT;
-            else if(i == height + 1 && myID == numProcs) grid[i][j] = TEMP_BAS;
+            else if(i == height + 1 && myID == numProcs - 1) grid[i][j] = TEMP_BAS;
             else if(j == 0) grid[i][j] = TEMP_GAUCHE;
             else if(j == n + 1) grid[i][j] = TEMP_DROITE;
             else grid[i][j] = TEMP_INITIALE;
         }
     }
+}
+
+void print(float** grid, int n, int height, int myID) {
+	printf("Process %d\n", myID);
+	
+	for(int i = 0; i < height + 2; i++) {
+		for(int j = 0; j < n + 2; j++) {
+			printf("%6.2f\t", grid[i][j]);
+		}
+		printf("\n");
+	}
 }
 
 int main(int argc, char *argv[]) {
@@ -35,7 +46,7 @@ int main(int argc, char *argv[]) {
     float mydiff = 0.0, otherdiff = 0.0;
 
     MPI_Status status;
-    MPI_Request rqSendUp[numProcs], rqSendDown[numProcs];
+    MPI_Request rqSendUp, rqSendDown;
 
     if(argc != 2 || n < 3) {
         printf("Utilisation : jacobi <n>\nn : largeur de la grille, supérieure à 3\n");
@@ -83,15 +94,21 @@ int main(int argc, char *argv[]) {
 
         /* Envoi des bords aux voisins */
         if(myID > 0)
-            MPI_Isend(new[1], n, MPI_FLOAT, myID - 1, TAG_UP, MPI_COMM_WORLD, &rqSendUp[myID]);
+            MPI_Isend(new[1], n, MPI_FLOAT, myID - 1, TAG_UP, MPI_COMM_WORLD, &rqSendUp);
         if(myID < numProcs - 1)
-            MPI_Isend(new[height], n, MPI_FLOAT, myID + 1, TAG_DOWN, MPI_COMM_WORLD, &rqSendDown[myID]);
+            MPI_Isend(new[height], n, MPI_FLOAT, myID + 1, TAG_DOWN, MPI_COMM_WORLD, &rqSendDown);
 
         for(int i = 2; i <= height - 1; i++) {
             for(int j = 1; j <= n; j++) {
                 grid[i][j] = (new[i - 1][j] + new[i + 1][j] + new[i][j - 1] + new[i][j + 1]) * 0.25;
             }
         }
+
+        /* Attente des envois asynchrones */
+        if(myID > 0)
+            MPI_Wait(&rqSendUp, &status);
+        if(myID < numProcs - 1)
+            MPI_Wait(&rqSendDown, &status);
 
         /* Réception des bords des voisins */
         if(myID < numProcs - 1)
@@ -104,13 +121,11 @@ int main(int argc, char *argv[]) {
 	    grid[1][j] = (new[0][j] + new[2][j] + new[1][j - 1] + new[1][j + 1]) * 0.25;
             grid[height][j] = (new[height - 1][j] + new[height + 1][j] + new[height][j - 1] + new[height][j + 1]) * 0.25;
         }
-
-        /* Attente des envois asynchrones */
-        if(myID > 0)
-            MPI_Wait(&rqSendUp[myID], &status);
-        if(myID < numProcs - 1)
-            MPI_Wait(&rqSendDown[myID], &status);
     }
+
+    fflush(stdout);
+    MPI_Barrier(MPI_COMM_WORLD);
+    print(grid, n, height, myID);
 
     /* Calcul du maximum */
     for(int i = 1; i <= height; i++) {
