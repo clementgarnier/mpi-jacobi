@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define MAX_ITER 10000
+#define MAX_ITER 4
 #define TEMP_INITIALE 0.0
 #define TEMP_GAUCHE 10
 #define TEMP_DROITE 10
@@ -38,15 +38,27 @@ void print(float** grid, int n, int height, int myID) {
 	}
 }
 
+void handle_mpi_error(ierr) {
+	int resultlen;
+	char err_buffer[MPI_MAX_ERROR_STRING];
+
+	if (ierr != MPI_SUCCESS) {
+           	MPI_Error_string(ierr,err_buffer,&resultlen);
+           	printf("Erreur : %d\n", ierr);
+		MPI_Finalize();
+	}
+}
+
 int main(int argc, char *argv[]) {
 
     int numProcs, myID, height;
     int n = atoi(argv[1]);
 
-    float mydiff = 0.0, otherdiff = 0.0;
+    float localDiff = 0.0, globalDiff = 0.0;
 
     MPI_Status status;
     MPI_Request rqSendUp, rqSendDown;
+    int ierrUp, ierrDown;
 
     if(argc != 2 || n < 3) {
         printf("Utilisation : jacobi <n>\nn : largeur de la grille, supérieure à 3\n");
@@ -93,10 +105,14 @@ int main(int argc, char *argv[]) {
         }
 
         /* Envoi des bords aux voisins */
-        if(myID > 0)
-            MPI_Isend(new[1], n, MPI_FLOAT, myID - 1, TAG_UP, MPI_COMM_WORLD, &rqSendUp);
-        if(myID < numProcs - 1)
-            MPI_Isend(new[height], n, MPI_FLOAT, myID + 1, TAG_DOWN, MPI_COMM_WORLD, &rqSendDown);
+        if(myID > 0) {
+            ierrUp = MPI_Isend(new[1], n + 2, MPI_FLOAT, myID - 1, TAG_UP, MPI_COMM_WORLD, &rqSendUp);
+	    handle_mpi_error(ierrUp);
+	}
+        if(myID < numProcs - 1) {
+            ierrDown = MPI_Isend(new[height], n + 2, MPI_FLOAT, myID + 1, TAG_DOWN, MPI_COMM_WORLD, &rqSendDown);
+	    handle_mpi_error(ierrDown);
+	}
 
         for(int i = 2; i <= height - 1; i++) {
             for(int j = 1; j <= n; j++) {
@@ -111,11 +127,14 @@ int main(int argc, char *argv[]) {
             MPI_Wait(&rqSendDown, &status);
 
         /* Réception des bords des voisins */
-        if(myID < numProcs - 1)
-            MPI_Recv(new[height + 1], n, MPI_FLOAT, myID + 1, TAG_UP, MPI_COMM_WORLD, &status);
-        if(myID > 0)
-            MPI_Recv(new[0], n, MPI_FLOAT, myID - 1, TAG_DOWN, MPI_COMM_WORLD, &status);
-
+	if(myID < numProcs - 1) {
+            ierrUp = MPI_Recv(new[height + 1], n + 2, MPI_FLOAT, myID + 1, TAG_UP, MPI_COMM_WORLD, &status);
+            handle_mpi_error(ierrUp);
+	}
+	if(myID > 0) {
+            ierrDown = MPI_Recv(new[0], n + 2, MPI_FLOAT, myID - 1, TAG_DOWN, MPI_COMM_WORLD, &status);
+	    handle_mpi_error(ierrDown);
+	}
         /* Calcul des valeurs pour les bords */
         for(int j = 1; j <= n; j++) {
 	    grid[1][j] = (new[0][j] + new[2][j] + new[1][j - 1] + new[1][j + 1]) * 0.25;
@@ -125,30 +144,19 @@ int main(int argc, char *argv[]) {
 
     fflush(stdout);
     MPI_Barrier(MPI_COMM_WORLD);
-    print(grid, n, height, myID);
+    print(new, n, height, myID);
 
     /* Calcul du maximum */
     for(int i = 1; i <= height; i++) {
         for(int j = 1; j <= n; j++) {
-	    mydiff = fmax(mydiff, fabs(grid[i][j] - new[i][j]));
+	    localDiff = fmax(localDiff, fabs(grid[i][j] - new[i][j]));
         }
     }
 
-    /* Envoi du maximum local au process 0 */
-    if(myID > 0)
-        MPI_Send(&mydiff, 1, MPI_FLOAT, 0, TAG_DIFF, MPI_COMM_WORLD);
-    /* Réception du maximum des autres process */
-    else {
-        for(int w = 1; w < numProcs; w++) {
-	    MPI_Recv(&otherdiff, 1, MPI_FLOAT, w, TAG_DIFF, MPI_COMM_WORLD, &status);
-	    printf("otherdiff = %f\n", otherdiff);
-	    mydiff = fmax(mydiff, otherdiff);
-        }
-    }
-
-    if(myID == 0) {
-    	printf("Différence maximale = %f\n", mydiff);
-    }
+    MPI_Reduce(&localDiff, &globalDiff, 1, MPI_FLOAT, MPI_MAX, 0, MPI_COMM_WORLD);
+    	
+    if(myID == 0)
+	printf("Différence maximale = %f\n", globalDiff);
 
     MPI_Finalize();
 
