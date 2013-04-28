@@ -3,4 +3,6 @@
 !.gitignore
 !makefile
 !jacobi.c
-
+!gauss-seidel.c
+!helpers.h
+!helpers.c

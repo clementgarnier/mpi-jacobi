@@ -10,7 +10,7 @@ NP=8
 # Executable par defaut pour les regles generiques
 EXEC=jacobi
 
-EXECS=jacobi
+EXECS=jacobi gauss_seidel
 
 
 ######################################################
@@ -29,13 +29,10 @@ RUN = $(MPICH)/mpirun
 EXIT = $(MPICH)/mpdallexit
 CFLAGS = -std=c99
 
-########################################
-# Regles specifiques pour exercice 1.
-########################################
 compile-jacobi: jacobi
 
 jacobi: jacobi.c
-	$(CC) $(CFLAGS) -o jacobi jacobi.c -lm
+	$(CC) $(CFLAGS) -o jacobi jacobi.c helpers.c -lm
 
 .copies_effectuees1: jacobi
 	@cp jacobi /home/$(USAGER)
@@ -45,6 +42,21 @@ jacobi: jacobi.c
 run-jacobi: .copies_effectuees1 .mpdboot compile
 	@echo "*** On lance l'execution"
 	@(cd /home/$(USAGER); $(RUN) -np $(NP) jacobi 8 200)
+
+compile-gauss_seidel: gauss_seidel
+
+gauss_seidel: gauss-seidel.c
+	$(CC) $(CFLAGS) -o gauss_seidel gauss-seidel.c helpers.c -lm
+
+.copies_effectuees2: gauss_seidel
+	@cp gauss_seidel /home/$(USAGER)
+	@./cp-sur-blades.sh /home/$(USAGER)/gauss_seidel
+	@touch .copies_effectuees2
+
+run-gauss_seidel: .copies_effectuees2 .mpdboot compile
+	@echo "*** On lance l'execution"
+	@(cd /home/$(USAGER); $(RUN) -np $(NP) gauss_seidel 8 200)
+
 
 ######################################################
 ######################################################
