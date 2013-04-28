@@ -10,9 +10,11 @@
 #define TAG_DOWN 1
 #define TAG_DIFF 2
  
-float* jacobi(int n, int maxIter, int argc, char *argv[]) {
+result jacobi(int n, int maxIter, int myID, int numProcs) {
 
-    int numProcs, myID, height;
+    result myResult;
+
+    int height;
     float localDiff = 0.0, globalDiff = 0.0;
 
     MPI_Status status;
@@ -20,20 +22,6 @@ float* jacobi(int n, int maxIter, int argc, char *argv[]) {
     
     int ierrUp, ierrDown;
        
-    /* Initialisation de MPI */
-    MPI_Init( &argc, &argv );
-
-    /* Détermination de l'id du process courant */
-    MPI_Comm_rank( MPI_COMM_WORLD, &myID );
-
-    /* Détermination du nombre de process */
-    MPI_Comm_size( MPI_COMM_WORLD, &numProcs );
-
-    if(n % numProcs != 0) {
-        printf("n doit être un multiple de %d", numProcs);
-        exit(EXIT_FAILURE);
-    }
-
     /* Calcul de la hauteur de la tranche */
     height = n / numProcs;
 
@@ -138,30 +126,49 @@ float* jacobi(int n, int maxIter, int argc, char *argv[]) {
     MPI_Reduce(&localDiff, &globalDiff, 1, MPI_FLOAT, MPI_MAX, 0, MPI_COMM_WORLD);
         
     if(myID == 0) {
-        printf("New :\n");
-        print_buffer(globalNew, (n + 2) * n, n + 2);
-        printf("Grid :\n");
-        print_buffer(globalGrid, (n + 2) * n, n + 2);
-        printf("Différence maximale = %f\n", globalDiff);
+        myResult.grid = globalGrid;
+        myResult.diff = globalDiff;    
     }
 
-    MPI_Finalize();
-
-    return globalGrid;
+    return myResult;
 }
 
 int main(int argc, char *argv[]) {
 
+    int myID, numProcs;
     int n = atoi(argv[1]);
     int maxIter = atoi(argv[2]);
+    result myResult;
 
-    if(argc != 2 || n < 3 || maxIter < 1) {
-        printf("Utilisation : jacobi <n> <max_iter>\nn : largeur de la grille, supérieure à 3\n max_iter : nombre d'itérations, supérieur à 1");
+    /* Initialisation de MPI */
+    MPI_Init( &argc, &argv );
+
+    /* Détermination de l'id du process courant */
+    MPI_Comm_rank( MPI_COMM_WORLD, &myID );
+
+    /* Détermination du nombre de process */
+    MPI_Comm_size( MPI_COMM_WORLD, &numProcs );
+
+    if(n % numProcs != 0) {
+        printf("n doit être un multiple de %d", numProcs);
         exit(EXIT_FAILURE);
     }
     
-    jacobi(n, maxIter, argc, argv);
+    if(argc != 3 || n < 3 || maxIter < 1) {
+        printf("Utilisation : jacobi <n> <max_iter>\nn : largeur de la grille, supérieure à 3\nmax_iter : nombre d'itérations, supérieur à 1\n");
+        exit(EXIT_FAILURE);
+    }
+    
+    myResult = jacobi(n, maxIter, myID, numProcs);
+    
+    if(myID == 0) {
+        printf("Grid :\n");
+        print_buffer(myResult.grid, (n + 2) * n, n + 2);
+        printf("Différence maximale = %f\n", myResult.diff);
+    }    
 
+    MPI_Finalize(); 
+    
     return 0;
 }
 

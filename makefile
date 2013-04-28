@@ -67,7 +67,7 @@ gauss_seidel: gauss-seidel.c
 	@./cp-sur-blades.sh /home/$(USAGER)/gauss_seidel
 	@touch .copies_effectuees2
 
-run-gauss_seidel: .copies_effectuees2 .mpdboot compile
+run-gauss_seidel: .copies_effectuees3 .mpdboot compile
 	@echo "*** On lance l'execution"
 	@(cd /home/$(USAGER); $(RUN) -np $(NP) gauss_seidel 8 200)
 
