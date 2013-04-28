@@ -44,7 +44,7 @@ jacobi: jacobi.c
 
 run-jacobi: .copies_effectuees1 .mpdboot compile
 	@echo "*** On lance l'execution"
-	@(cd /home/$(USAGER); $(RUN) -np $(NP) jacobi 8)
+	@(cd /home/$(USAGER); $(RUN) -np $(NP) jacobi 8 200)
 
 ######################################################
 ######################################################

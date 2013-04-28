@@ -4,7 +4,6 @@
 #include <math.h>
 #include <string.h>
 
-#define MAX_ITER 500000
 #define TEMP_INITIALE 0.0
 #define TEMP_GAUCHE 10
 #define TEMP_DROITE 10
@@ -51,7 +50,7 @@ void print_buffer(float* buf, int length, int step) {
 }
 
 /* Affiche une erreur de message MPI */
-void handle_mpi_error(ierr) {
+void handle_mpi_error(int ierr) {
     int resultlen;
     char err_buffer[MPI_MAX_ERROR_STRING];
 
@@ -66,6 +65,7 @@ int main(int argc, char *argv[]) {
 
     int numProcs, myID, height;
     int n = atoi(argv[1]);
+    int maxIter = atoi(argv[2]);
 
     float localDiff = 0.0, globalDiff = 0.0;
 
@@ -73,8 +73,8 @@ int main(int argc, char *argv[]) {
     MPI_Request rqSendUp, rqSendDown;
     int ierrUp, ierrDown;
 
-    if(argc != 2 || n < 3) {
-        printf("Utilisation : jacobi <n>\nn : largeur de la grille, supérieure à 3\n");
+    if(argc != 3 || n < 3 || maxIter < 1) {
+        printf("Utilisation : jacobi <n> <max_iter>\nn : largeur de la grille, supérieure à 3\n max_iter : nombre d'itérations, supérieur à 1");
         exit(EXIT_FAILURE);
     }
         
@@ -119,7 +119,7 @@ int main(int argc, char *argv[]) {
     /* Synchronisation globale */
     MPI_Barrier(MPI_COMM_WORLD);
 
-    for(int t = 0; t < MAX_ITER; t = t + 2) {
+    for(int t = 0; t < maxIter; t = t + 2) {
         for(int i = 1; i <= height; i++) {
             for(int j = 1; j <= n; j++) {
                 new[i][j] = (grid[i - 1][j] + grid[i + 1][j] + grid[i][j - 1] + grid[i][j + 1]) * 0.25;
