@@ -15,6 +15,7 @@
 #define TAG_DOWN 1
 #define TAG_DIFF 2
 
+/* Initialise une tranche */
 void initialize(float** grid, int n, int height, int numProcs, int myID) {
 
     for(int i = 0; i < height + 2; i++) {
@@ -28,6 +29,7 @@ void initialize(float** grid, int n, int height, int numProcs, int myID) {
     }
 }
 
+/* Affiche une tranche */
 void print(float** grid, int n, int height, int myID) {
     printf("Process %d\n", myID);
     
@@ -39,6 +41,7 @@ void print(float** grid, int n, int height, int myID) {
     }
 }
 
+/* Affiche une grille de résultats */
 void print_buffer(float* buf, int length, int step) {
     for(int i = 0; i < length; i++) {
         printf("%6.2f\t", buf[i]);
@@ -47,6 +50,7 @@ void print_buffer(float* buf, int length, int step) {
     printf("\n");
 }
 
+/* Affiche une erreur de message MPI */
 void handle_mpi_error(ierr) {
     int resultlen;
     char err_buffer[MPI_MAX_ERROR_STRING];
@@ -162,20 +166,18 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    fflush(stdout);
-    MPI_Barrier(MPI_COMM_WORLD);
-    // print(new, n, height, myID);
-
+    /* Récupération des résultats */ 
     MPI_Gather(grid[1], (n + 2) * height, MPI_FLOAT, globalGrid, (n + 2) * height, MPI_FLOAT, 0, MPI_COMM_WORLD);
     MPI_Gather(new[1], (n + 2) * height, MPI_FLOAT, globalNew, (n + 2) * height, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
-    /* Calcul du maximum */
+    /* Calcul du maximum local */
     for(int i = 1; i <= height; i++) {
         for(int j = 1; j <= n; j++) {
             localDiff = fmax(localDiff, fabs(grid[i][j] - new[i][j]));
         }
     }
-
+    
+    /* Calcul du maximum global */
     MPI_Reduce(&localDiff, &globalDiff, 1, MPI_FLOAT, MPI_MAX, 0, MPI_COMM_WORLD);
         
     if(myID == 0) {
