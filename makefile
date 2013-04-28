@@ -43,12 +43,26 @@ run-jacobi: .copies_effectuees1 .mpdboot compile
 	@echo "*** On lance l'execution"
 	@(cd /home/$(USAGER); $(RUN) -np $(NP) jacobi 8 200)
 
+compile-jacobi-opti: jacobi-opti
+
+jacobi-opti: jacobi-opti.c
+	$(CC) $(CFLAGS) -o jacobi_opti jacobi-opti.c helpers.c -lm
+
+.copies_effectuees2: jacobi-opti
+	@cp jacobi /home/$(USAGER)
+	@./cp-sur-blades.sh /home/$(USAGER)/jacobi_opti
+	@touch .copies_effectuees1
+
+run-jacobi-opti: .copies_effectuees1 .mpdboot compile
+	@echo "*** On lance l'execution"
+	@(cd /home/$(USAGER); $(RUN) -np $(NP) jacobi_opti 8 200)
+
 compile-gauss_seidel: gauss_seidel
 
 gauss_seidel: gauss-seidel.c
 	$(CC) $(CFLAGS) -o gauss_seidel gauss-seidel.c helpers.c -lm
 
-.copies_effectuees2: gauss_seidel
+.copies_effectuees3: gauss_seidel
 	@cp gauss_seidel /home/$(USAGER)
 	@./cp-sur-blades.sh /home/$(USAGER)/gauss_seidel
 	@touch .copies_effectuees2

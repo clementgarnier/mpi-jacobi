@@ -9,17 +9,17 @@
 #define TAG_UP   0
 #define TAG_DOWN 1
 #define TAG_DIFF 2
- 
-float* jacobi(int n, int maxIter, int argc, char *argv[]) {
+       
+float* jacobi_opti(int n, int maxIter, int argc, char *argv[]) {
 
     int numProcs, myID, height;
     float localDiff = 0.0, globalDiff = 0.0;
 
     MPI_Status status;
-    MPI_Request rqSendUp, rqSendDown, rqRecvUp, rqRecvDown;
-    
+    MPI_Request rqSendUp, rqSendDown;
+
     int ierrUp, ierrDown;
-       
+
     /* Initialisation de MPI */
     MPI_Init( &argc, &argv );
 
@@ -68,58 +68,43 @@ float* jacobi(int n, int maxIter, int argc, char *argv[]) {
             }
         }
 
-        /* Envoi/réception des bords */
-        if(myID < numProcs - 1) {
-            ierrDown = MPI_Isend(new[height], n + 2, MPI_FLOAT, myID + 1, TAG_DOWN, MPI_COMM_WORLD, &rqSendDown);
-            handle_mpi_error(ierrDown);
-            ierrUp = MPI_Irecv(new[height+1], n + 2, MPI_FLOAT, myID + 1, TAG_UP, MPI_COMM_WORLD, &rqRecvUp);
-            handle_mpi_error(ierrUp);
-        }
+        /* Envoi des bords aux voisins */
         if(myID > 0) {
             ierrUp = MPI_Isend(new[1], n + 2, MPI_FLOAT, myID - 1, TAG_UP, MPI_COMM_WORLD, &rqSendUp);
             handle_mpi_error(ierrUp);
-            ierrDown = MPI_Irecv(new[0], n + 2, MPI_FLOAT, myID - 1, TAG_DOWN, MPI_COMM_WORLD, &rqRecvDown);
+        }
+        if(myID < numProcs - 1) {
+            ierrDown = MPI_Isend(new[height], n + 2, MPI_FLOAT, myID + 1, TAG_DOWN, MPI_COMM_WORLD, &rqSendDown);
             handle_mpi_error(ierrDown);
         }
 
-        /* Attente des envois asynchrones */
-        if(myID < numProcs - 1) {
-            MPI_Wait(&rqSendDown, &status);
-            MPI_Wait(&rqRecvUp, &status);
-        }
-        if(myID > 0) {
-            MPI_Wait(&rqRecvDown, &status);
-            MPI_Wait(&rqSendUp, &status);
-        }
-
-        for(int i = 1; i <= height; i++) {
+        for(int i = 2; i <= height - 1; i++) {
             for(int j = 1; j <= n; j++) {
                 grid[i][j] = (new[i - 1][j] + new[i + 1][j] + new[i][j - 1] + new[i][j + 1]) * 0.25;
             }
         }
-        
-        /* Envoi/réception des bords */
-        if(myID < numProcs - 1) {
-            ierrDown = MPI_Isend(grid[height], n + 2, MPI_FLOAT, myID + 1, TAG_DOWN, MPI_COMM_WORLD, &rqSendDown);
-            handle_mpi_error(ierrDown);
-            ierrUp = MPI_Irecv(grid[height+1], n + 2, MPI_FLOAT, myID + 1, TAG_UP, MPI_COMM_WORLD, &rqRecvUp);
-            handle_mpi_error(ierrUp);
-        }
-        if(myID > 0) {
-            ierrUp = MPI_Isend(grid[1], n + 2, MPI_FLOAT, myID - 1, TAG_UP, MPI_COMM_WORLD, &rqSendUp);
-            handle_mpi_error(ierrUp);
-            ierrDown = MPI_Irecv(grid[0], n + 2, MPI_FLOAT, myID - 1, TAG_DOWN, MPI_COMM_WORLD, &rqRecvDown);
-            handle_mpi_error(ierrDown);
-        }
 
         /* Attente des envois asynchrones */
-        if(myID < numProcs - 1) {
+        if(myID > 0)
+            MPI_Wait(&rqSendUp, &status);
+        if(myID < numProcs - 1)
             MPI_Wait(&rqSendDown, &status);
-            MPI_Wait(&rqRecvUp, &status);
+
+        /* Réception des bords des voisins */
+        if(myID < numProcs - 1) {
+            memcpy(new[height + 1], grid[height + 1], sizeof(float) * (n + 2));
+            ierrUp = MPI_Recv(new[height + 1], n + 2, MPI_FLOAT, myID + 1, TAG_UP, MPI_COMM_WORLD, &status);
+            handle_mpi_error(ierrUp);
         }
         if(myID > 0) {
-            MPI_Wait(&rqRecvDown, &status);
-            MPI_Wait(&rqSendUp, &status);
+            memcpy(new[0], grid[0], sizeof(float) * (n + 2));
+            ierrDown = MPI_Recv(new[0], n + 2, MPI_FLOAT, myID - 1, TAG_DOWN, MPI_COMM_WORLD, &status);
+            handle_mpi_error(ierrDown);
+        }
+        /* Calcul des valeurs pour les bords */
+        for(int j = 1; j <= n; j++) {
+            grid[1][j] = (new[0][j] + new[2][j] + new[1][j - 1] + new[1][j + 1]) * 0.25;
+            grid[height][j] = (new[height - 1][j] + new[height + 1][j] + new[height][j - 1] + new[height][j + 1]) * 0.25;
         }
     }
 
@@ -151,17 +136,16 @@ float* jacobi(int n, int maxIter, int argc, char *argv[]) {
 }
 
 int main(int argc, char *argv[]) {
-
     int n = atoi(argv[1]);
     int maxIter = atoi(argv[2]);
 
-    if(argc != 2 || n < 3 || maxIter < 1) {
+    if(argc != 3 || n < 3 || maxIter < 1) {
         printf("Utilisation : jacobi <n> <max_iter>\nn : largeur de la grille, supérieure à 3\n max_iter : nombre d'itérations, supérieur à 1");
         exit(EXIT_FAILURE);
     }
-    
-    jacobi(n, maxIter, argc, argv);
 
+    jacobi_opti(n, maxIter, argc, argv);
+    
     return 0;
 }
-
+ 
